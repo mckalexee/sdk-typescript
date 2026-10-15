@@ -59,6 +59,7 @@ export {
   makeTelemetryFilterString,
   ConsoleLogger,
   ForwardLogger,
+  HistogramAggregation,
   LogExporterConfig,
   MetricsExporterConfig,
   OtelCollectorExporter,

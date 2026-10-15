@@ -76,6 +76,13 @@ to docs, or any other relevant information.
   the Worker runs on Node.js 23.8 or later. On older Node.js versions, `URLPattern` remains undefined
   inside Workflows.
 
+- **Experimental**: The OpenTelemetry metrics exporter can export histograms as OpenTelemetry
+  exponential histograms, which Prometheus-compatible backends store as native histograms, with
+  `histogramAggregation: { type: 'base2-exponential' }` on `metrics.otel`. It applies to every
+  histogram, including custom ones, and exports each under its name plus a suffix, `_native` by
+  default. It cannot be combined with `histogramBucketOverrides`. Explicit buckets remain the
+  default.
+
 ### Changed
 
 - Updated the following dependencies: `unionfs` from 4.5.1 to 4.6.0, `@grpc/grpc-js` from 1.12.4 to 1.12.7, `smol-toml` from 1.6.1 to 1.7.1

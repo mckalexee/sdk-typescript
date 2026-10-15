@@ -307,8 +307,55 @@ export interface OtelCollectorExporter {
      * for the exact meaning of boundaries.
      */
     histogramBucketOverrides?: Record<string, number[]>;
+
+    /**
+     * Selects how histogram metrics are aggregated.
+     *
+     * `'explicit-buckets'` uses fixed bucket boundaries, either Core's defaults for each metric or
+     * `histogramBucketOverrides`. `{ type: 'base2-exponential' }` exports every histogram, including
+     * custom ones created through the metric meter, as an OpenTelemetry base-2 exponential histogram,
+     * which Prometheus-compatible backends store as a native histogram. Exponential histograms are
+     * exported under the metric name plus a suffix, so they never share a name with the fixed-bucket
+     * series they replace, and cannot be combined with `histogramBucketOverrides`.
+     *
+     * @default 'explicit-buckets'
+     * @experimental
+     */
+    histogramAggregation?: HistogramAggregation;
   };
 }
+
+/**
+ * How the OpenTelemetry metrics exporter aggregates histogram metrics.
+ *
+ * @experimental
+ */
+export type HistogramAggregation =
+  | 'explicit-buckets'
+  | {
+      type: 'base2-exponential';
+
+      /**
+       * Maximum number of buckets in each of the positive and negative ranges.
+       *
+       * @default 160
+       */
+      maxSize?: number;
+
+      /**
+       * Maximum resolution scale, from -10 to 20. Prometheus reduces any scale above 8 on ingest.
+       *
+       * @default 20
+       */
+      maxScale?: number;
+
+      /**
+       * Appended to the name of every histogram. Must not be empty.
+       *
+       * @default '_native'
+       */
+      nameSuffix?: string;
+    };
 
 /**
  * Prometheus metrics exporter options
@@ -425,6 +472,16 @@ export function compileOptions(options: RuntimeOptions): CompiledRuntimeOptions 
                 useSecondsForDurations: metrics.otel.useSecondsForDurations ?? false,
                 metricTemporality: metrics.otel.temporality ?? metrics.temporality ?? 'cumulative', // eslint-disable-line @typescript-eslint/no-deprecated
                 histogramBucketOverrides: metrics.otel.histogramBucketOverrides ?? {},
+                histogramAggregation:
+                  metrics.otel.histogramAggregation === undefined ||
+                  metrics.otel.histogramAggregation === 'explicit-buckets'
+                    ? { type: 'explicit-buckets' }
+                    : {
+                        type: 'exponential',
+                        maxSize: metrics.otel.histogramAggregation.maxSize ?? null,
+                        maxScale: metrics.otel.histogramAggregation.maxScale ?? null,
+                        nameSuffix: metrics.otel.histogramAggregation.nameSuffix ?? null,
+                      },
                 globalTags: metrics.globalTags ?? {},
               } satisfies native.MetricExporterOptions)
             : metrics && isBufferedMetricsExporter(metrics)

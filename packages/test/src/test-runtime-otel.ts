@@ -2,10 +2,54 @@ import * as http from 'http';
 import * as http2 from 'http2';
 import { randomUUID } from 'crypto';
 import test from 'ava';
+import { Reader } from 'protobufjs/minimal';
 import { WorkflowClient } from '@temporalio/client';
 import { Runtime } from '@temporalio/worker';
 import { TestWorkflowEnvironment, Worker } from './helpers';
 import * as workflows from './workflows';
+
+const HISTOGRAM_FIELD = 9;
+const EXPONENTIAL_HISTOGRAM_FIELD = 10;
+
+/**
+ * Lists the metrics in an OTLP `ExportMetricsServiceRequest` body, with the number of the
+ * `Metric.data` field that carries each one, such as 9 for `histogram` or 10 for
+ * `exponential_histogram`.
+ */
+function exportedMetrics(body: Uint8Array): Array<{ name: string; dataField: number }> {
+  const submessages = (buf: Uint8Array, field: number): Uint8Array[] => {
+    const found: Uint8Array[] = [];
+    const reader = Reader.create(buf);
+    while (reader.pos < reader.len) {
+      const tag = reader.uint32();
+      if (tag >>> 3 === field) found.push(reader.bytes());
+      else reader.skipType(tag & 7);
+    }
+    return found;
+  };
+  const metrics: Array<{ name: string; dataField: number }> = [];
+  for (const resourceMetrics of submessages(body, 1)) {
+    for (const scopeMetrics of submessages(resourceMetrics, 2)) {
+      for (const metric of submessages(scopeMetrics, 2)) {
+        let name = '';
+        let dataField = 0;
+        const reader = Reader.create(metric);
+        while (reader.pos < reader.len) {
+          const tag = reader.uint32();
+          const field = tag >>> 3;
+          if (field === 1) {
+            name = reader.string();
+          } else {
+            if (field >= 5 && field <= 11) dataField = field;
+            reader.skipType(tag & 7);
+          }
+        }
+        metrics.push({ name, dataField });
+      }
+    }
+  }
+  return metrics;
+}
 
 async function withFakeGrpcServer(
   fn: (port: number) => Promise<void>,
@@ -204,6 +248,92 @@ test.serial('Exporting OTEL metrics using OTLP/HTTP from Core works', async (t) 
     }, resolveCapturedRequest);
   } finally {
     // Cleanup the runtime so that it doesn't interfere with other tests
+    await Runtime._instance?.shutdown();
+  }
+});
+
+test.serial('Exporting OTEL metrics as exponential histograms from Core works', async (t) => {
+  const exported: Array<{ name: string; dataField: number }> = [];
+  try {
+    await withHttpServer(
+      async (port: number) => {
+        Runtime.install({
+          telemetryOptions: {
+            metrics: {
+              otel: {
+                url: `http://127.0.0.1:${port}/v1/metrics`,
+                http: true,
+                metricsExportInterval: 10,
+                histogramAggregation: { type: 'base2-exponential', nameSuffix: '_exp' },
+              },
+            },
+          },
+        });
+
+        const localEnv = await TestWorkflowEnvironment.createLocal();
+        try {
+          const worker = await Worker.create({
+            connection: localEnv.nativeConnection,
+            workflowsPath: require.resolve('./workflows'),
+            taskQueue: 'test-otel-exponential',
+          });
+          const client = new WorkflowClient({
+            connection: localEnv.connection,
+          });
+          await worker.runUntil(async () => {
+            await client.execute(workflows.successString, {
+              taskQueue: 'test-otel-exponential',
+              workflowId: randomUUID(),
+            });
+            // The first exports may carry only counters and gauges, so wait for a histogram.
+            const deadline = Date.now() + 5000;
+            while (!exported.some((m) => m.dataField === EXPONENTIAL_HISTOGRAM_FIELD) && Date.now() < deadline) {
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+          });
+        } finally {
+          await localEnv.teardown();
+        }
+      },
+      async (req) => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        exported.push(...exportedMetrics(Buffer.concat(chunks)));
+      }
+    );
+  } finally {
+    // Cleanup the runtime so that it doesn't interfere with other tests
+    await Runtime._instance?.shutdown();
+  }
+
+  const histograms = exported.filter(
+    (m) => m.dataField === HISTOGRAM_FIELD || m.dataField === EXPONENTIAL_HISTOGRAM_FIELD
+  );
+  t.true(histograms.length > 0, 'no histograms were exported');
+  for (const { name, dataField } of histograms) {
+    t.is(dataField, EXPONENTIAL_HISTOGRAM_FIELD, `${name} was exported as a fixed-bucket histogram`);
+    t.true(name.endsWith('_exp'), `${name} is missing the name suffix`);
+  }
+});
+
+test.serial('Runtime.install() rejects exponential histograms combined with histogramBucketOverrides', async (t) => {
+  try {
+    t.throws(
+      () =>
+        Runtime.install({
+          telemetryOptions: {
+            metrics: {
+              otel: {
+                url: 'http://127.0.0.1:1234',
+                histogramBucketOverrides: { request_latency: [1, 5, 10] },
+                histogramAggregation: { type: 'base2-exponential' },
+              },
+            },
+          },
+        }),
+      { message: /histogram_bucket_overrides/ }
+    );
+  } finally {
     await Runtime._instance?.shutdown();
   }
 });

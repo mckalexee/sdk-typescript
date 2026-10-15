@@ -97,6 +97,27 @@ impl TryFromJs for u64 {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
+impl TryFromJs for u32 {
+    fn try_from_js<'cx, 'b>(
+        cx: &mut impl Context<'cx>,
+        js_value: Handle<'b, JsValue>,
+    ) -> BridgeResult<Self> {
+        #[allow(clippy::cast_sign_loss)]
+        Ok(js_value.downcast::<JsNumber, _>(cx)?.value(cx) as Self)
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+impl TryFromJs for i8 {
+    fn try_from_js<'cx, 'b>(
+        cx: &mut impl Context<'cx>,
+        js_value: Handle<'b, JsValue>,
+    ) -> BridgeResult<Self> {
+        Ok(js_value.downcast::<JsNumber, _>(cx)?.value(cx) as Self)
+    }
+}
+
 impl TryFromJs for f64 {
     fn try_from_js<'cx, 'b>(
         cx: &mut impl Context<'cx>,
