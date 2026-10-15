@@ -34,8 +34,6 @@ to docs, or any other relevant information.
   resolve. `@temporalio/testing` and `@temporalio/lambda-worker` now exports only its package root
   and `package.json`;
   its `lib/*` compatibility fallback has been removed.
-- `@temporalio/testing` no longer permits deep imports, including `lib/*`. Use its package root for
-  public APIs; `@temporalio/testing/package.json` remains available.
 - **Experimental**: Nexus Workflow Updates now require `waitForStage` to be explicitly set to `ACCEPTED`.
 
 ### Added
@@ -95,9 +93,9 @@ to docs, or any other relevant information.
 
 ### Deprecated
 
-- Undocumented `lib/*` imports in the other consolidated SDK packages are deprecated but remain
-  available temporarily as a compatibility fallback. The following `@temporalio/common` entrypoints
-  remain supported: `@temporalio/common/lib/encoding`, `@temporalio/common/lib/protobufs`,
+- Undocumented imports through `@temporalio/*/lib/*` are deprecated. Where present, the wildcard remains
+  temporarily as a compatibility fallback. `@temporalio/common` will keep the following entrypoints
+  for compatibility: `@temporalio/common/lib/encoding`, `@temporalio/common/lib/protobufs`,
   `@temporalio/common/lib/proto-utils`, and `@temporalio/common/lib/time`.
 
 ### Fixed
