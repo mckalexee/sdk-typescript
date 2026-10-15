@@ -359,12 +359,12 @@ mod config {
         global_tags: HashMap<String, String>,
         use_seconds_for_durations: bool,
         histogram_bucket_overrides: HashMap<String, Vec<f64>>,
-        histogram_aggregation: HistogramAggregationConfig,
+        histogram_aggregation: HistogramAggregationOptions,
         protocol: StringEncoded<OtlpProtocol>,
     }
 
     #[derive(Debug, Clone, TryFromJs)]
-    pub(super) enum HistogramAggregationConfig {
+    pub(super) enum HistogramAggregationOptions {
         ExplicitBuckets,
         Exponential {
             max_size: Option<u32>,
@@ -481,6 +481,26 @@ mod config {
         }
     }
 
+    impl From<HistogramAggregationOptions> for HistogramAggregation {
+        fn from(val: HistogramAggregationOptions) -> Self {
+            match val {
+                HistogramAggregationOptions::ExplicitBuckets => Self::ExplicitBuckets,
+                HistogramAggregationOptions::Exponential {
+                    max_size,
+                    max_scale,
+                    name_suffix,
+                } => {
+                    let defaults = Base2ExponentialHistogramOptions::default();
+                    Self::Base2Exponential(Base2ExponentialHistogramOptions {
+                        max_size: max_size.unwrap_or(defaults.max_size),
+                        max_scale: max_scale.unwrap_or(defaults.max_scale),
+                        name_suffix: name_suffix.unwrap_or(defaults.name_suffix),
+                    })
+                }
+            }
+        }
+    }
+
     impl TryInto<CoreOtelCollectorOptions> for OtelMetricsExporterConfig {
         type Error = BridgeError;
 
@@ -495,23 +515,7 @@ mod config {
                 .histogram_bucket_overrides(HistogramBucketOverrides {
                     overrides: self.histogram_bucket_overrides,
                 })
-                .histogram_aggregation(match self.histogram_aggregation {
-                    HistogramAggregationConfig::ExplicitBuckets => {
-                        HistogramAggregation::ExplicitBuckets
-                    }
-                    HistogramAggregationConfig::Exponential {
-                        max_size,
-                        max_scale,
-                        name_suffix,
-                    } => {
-                        let defaults = Base2ExponentialHistogramOptions::default();
-                        HistogramAggregation::Base2Exponential(Base2ExponentialHistogramOptions {
-                            max_size: max_size.unwrap_or(defaults.max_size),
-                            max_scale: max_scale.unwrap_or(defaults.max_scale),
-                            name_suffix: name_suffix.unwrap_or(defaults.name_suffix),
-                        })
-                    }
-                })
+                .histogram_aggregation(self.histogram_aggregation.into())
                 .global_tags(self.global_tags)
                 .build();
 

@@ -5,16 +5,23 @@ import test from 'ava';
 import { Reader } from 'protobufjs/minimal';
 import { WorkflowClient } from '@temporalio/client';
 import { Runtime } from '@temporalio/worker';
-import { TestWorkflowEnvironment, Worker } from './helpers';
+import { TestWorkflowEnvironment, Worker, waitUntil } from './helpers';
 import * as workflows from './workflows';
 
-const HISTOGRAM_FIELD = 9;
-const EXPONENTIAL_HISTOGRAM_FIELD = 10;
+// Field numbers from opentelemetry/proto/collector/metrics/v1/metrics_service.proto and
+// opentelemetry/proto/metrics/v1/metrics.proto.
+const RESOURCE_METRICS_FIELD = 1; // ExportMetricsServiceRequest.resource_metrics
+const SCOPE_METRICS_FIELD = 2; // ResourceMetrics.scope_metrics
+const METRICS_FIELD = 2; // ScopeMetrics.metrics
+const METRIC_NAME_FIELD = 1; // Metric.name
+const METRIC_DATA_FIRST_FIELD = 5; // Metric.data oneof spans fields 5 to 11
+const METRIC_DATA_LAST_FIELD = 11;
+const HISTOGRAM_FIELD = 9; // Metric.histogram
+const EXPONENTIAL_HISTOGRAM_FIELD = 10; // Metric.exponential_histogram
 
 /**
  * Lists the metrics in an OTLP `ExportMetricsServiceRequest` body, with the number of the
- * `Metric.data` field that carries each one, such as 9 for `histogram` or 10 for
- * `exponential_histogram`.
+ * `Metric.data` field that carries each one.
  */
 function exportedMetrics(body: Uint8Array): Array<{ name: string; dataField: number }> {
   const submessages = (buf: Uint8Array, field: number): Uint8Array[] => {
@@ -28,19 +35,19 @@ function exportedMetrics(body: Uint8Array): Array<{ name: string; dataField: num
     return found;
   };
   const metrics: Array<{ name: string; dataField: number }> = [];
-  for (const resourceMetrics of submessages(body, 1)) {
-    for (const scopeMetrics of submessages(resourceMetrics, 2)) {
-      for (const metric of submessages(scopeMetrics, 2)) {
+  for (const resourceMetrics of submessages(body, RESOURCE_METRICS_FIELD)) {
+    for (const scopeMetrics of submessages(resourceMetrics, SCOPE_METRICS_FIELD)) {
+      for (const metric of submessages(scopeMetrics, METRICS_FIELD)) {
         let name = '';
         let dataField = 0;
         const reader = Reader.create(metric);
         while (reader.pos < reader.len) {
           const tag = reader.uint32();
           const field = tag >>> 3;
-          if (field === 1) {
+          if (field === METRIC_NAME_FIELD) {
             name = reader.string();
           } else {
-            if (field >= 5 && field <= 11) dataField = field;
+            if (field >= METRIC_DATA_FIRST_FIELD && field <= METRIC_DATA_LAST_FIELD) dataField = field;
             reader.skipType(tag & 7);
           }
         }
@@ -264,7 +271,7 @@ test.serial('Exporting OTEL metrics as exponential histograms from Core works', 
                 url: `http://127.0.0.1:${port}/v1/metrics`,
                 http: true,
                 metricsExportInterval: 10,
-                histogramAggregation: { type: 'base2-exponential', nameSuffix: '_exp' },
+                histogramAggregation: { type: 'exponential', nameSuffix: '_exp' },
               },
             },
           },
@@ -286,10 +293,7 @@ test.serial('Exporting OTEL metrics as exponential histograms from Core works', 
               workflowId: randomUUID(),
             });
             // The first exports may carry only counters and gauges, so wait for a histogram.
-            const deadline = Date.now() + 5000;
-            while (!exported.some((m) => m.dataField === EXPONENTIAL_HISTOGRAM_FIELD) && Date.now() < deadline) {
-              await new Promise((resolve) => setTimeout(resolve, 50));
-            }
+            await waitUntil(async () => exported.some((m) => m.dataField === EXPONENTIAL_HISTOGRAM_FIELD), 5000);
           });
         } finally {
           await localEnv.teardown();
@@ -326,12 +330,12 @@ test.serial('Runtime.install() rejects exponential histograms combined with hist
               otel: {
                 url: 'http://127.0.0.1:1234',
                 histogramBucketOverrides: { request_latency: [1, 5, 10] },
-                histogramAggregation: { type: 'base2-exponential' },
+                histogramAggregation: { type: 'exponential' },
               },
             },
           },
         }),
-      { message: /histogram_bucket_overrides/ }
+      { instanceOf: Error, message: /histogram_bucket_overrides/ }
     );
   } finally {
     await Runtime._instance?.shutdown();

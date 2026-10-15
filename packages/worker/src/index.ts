@@ -58,6 +58,8 @@ export {
   RuntimeOptions,
   makeTelemetryFilterString,
   ConsoleLogger,
+  ExplicitBucketsHistogramAggregation,
+  ExponentialHistogramAggregation,
   ForwardLogger,
   HistogramAggregation,
   LogExporterConfig,

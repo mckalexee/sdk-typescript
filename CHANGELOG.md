@@ -78,7 +78,7 @@ to docs, or any other relevant information.
 
 - **Experimental**: The OpenTelemetry metrics exporter can export histograms as OpenTelemetry
   exponential histograms, which Prometheus-compatible backends store as native histograms, with
-  `histogramAggregation: { type: 'base2-exponential' }` on `metrics.otel`. It applies to every
+  `histogramAggregation: { type: 'exponential' }` on `metrics.otel`. It applies to every
   histogram, including custom ones, and exports each under its name plus a suffix, `_native` by
   default. It cannot be combined with `histogramBucketOverrides`. Explicit buckets remain the
   default.
@@ -119,6 +119,8 @@ to docs, or any other relevant information.
 - A workflow task that arrives while a Workflow waits on a Local Activity, such as a legacy query, now
   waits until the current workflow task is reported. Previously it replaced that workflow task, which then
   timed out on the server and could leave the Workflow stuck on a nondeterminism error (temporalio/sdk-rust#1640).
+- Workflows paused before a scheduled workflow task starts now resume after unpause instead of
+  failing during history replay (temporalio/sdk-rust#1618).
 
 ### Changed
 
