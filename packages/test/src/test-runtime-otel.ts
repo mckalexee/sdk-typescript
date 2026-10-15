@@ -144,6 +144,44 @@ test.serial('Runtime.install() throws meaningful error when passed invalid metri
   });
 });
 
+test.serial(
+  'Runtime.install() throws meaningful error when metrics.otel.histogramAggregation is combined with histogramBucketOverrides',
+  async (t) => {
+    t.throws(
+      () =>
+        Runtime.install({
+          telemetryOptions: {
+            metrics: {
+              otel: {
+                url: 'http://127.0.0.1:1234',
+                histogramBucketOverrides: { request_latency: [1, 5, 10] },
+                histogramAggregation: { type: 'exponential' },
+              },
+            },
+          },
+        }),
+      { instanceOf: Error, message: /histogram_bucket_overrides/ }
+    );
+  }
+);
+
+test.serial('Runtime.install() throws meaningful error when passed invalid metrics.otel.histogramAggregation', async (t) => {
+  t.throws(
+    () =>
+      Runtime.install({
+        telemetryOptions: {
+          metrics: {
+            otel: {
+              url: 'http://127.0.0.1:1234',
+              histogramAggregation: { type: 'bogus' } as any,
+            },
+          },
+        },
+      }),
+    { instanceOf: TypeError, message: /metrics.otel.histogramAggregation/ }
+  );
+});
+
 test.serial('Runtime.install() accepts metrics.otel.url without headers', async (t) => {
   try {
     Runtime.install({ telemetryOptions: { metrics: { otel: { url: 'http://127.0.0.1:1234' } } } });
@@ -292,8 +330,12 @@ test.serial('Exporting OTEL metrics as exponential histograms from Core works', 
               taskQueue: 'test-otel-exponential',
               workflowId: randomUUID(),
             });
-            // The first exports may carry only counters and gauges, so wait for a histogram.
-            await waitUntil(async () => exported.some((m) => m.dataField === EXPONENTIAL_HISTOGRAM_FIELD), 5000);
+            // The first exports may carry only counters and gauges, so wait for a histogram of either kind.
+            await waitUntil(
+              async () =>
+                exported.some((m) => m.dataField === HISTOGRAM_FIELD || m.dataField === EXPONENTIAL_HISTOGRAM_FIELD),
+              5000
+            );
           });
         } finally {
           await localEnv.teardown();
@@ -317,27 +359,5 @@ test.serial('Exporting OTEL metrics as exponential histograms from Core works', 
   for (const { name, dataField } of histograms) {
     t.is(dataField, EXPONENTIAL_HISTOGRAM_FIELD, `${name} was exported as a fixed-bucket histogram`);
     t.true(name.endsWith('_exp'), `${name} is missing the name suffix`);
-  }
-});
-
-test.serial('Runtime.install() rejects exponential histograms combined with histogramBucketOverrides', async (t) => {
-  try {
-    t.throws(
-      () =>
-        Runtime.install({
-          telemetryOptions: {
-            metrics: {
-              otel: {
-                url: 'http://127.0.0.1:1234',
-                histogramBucketOverrides: { request_latency: [1, 5, 10] },
-                histogramAggregation: { type: 'exponential' },
-              },
-            },
-          },
-        }),
-      { instanceOf: Error, message: /histogram_bucket_overrides/ }
-    );
-  } finally {
-    await Runtime._instance?.shutdown();
   }
 });

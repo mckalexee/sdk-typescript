@@ -75,13 +75,10 @@ to docs, or any other relevant information.
 - The Workflow sandbox now exposes `URLPattern`, both as a global and from the `url` module, when
   the Worker runs on Node.js 23.8 or later. On older Node.js versions, `URLPattern` remains undefined
   inside Workflows.
-
-- **Experimental**: The OpenTelemetry metrics exporter can export histograms as OpenTelemetry
-  exponential histograms, which Prometheus-compatible backends store as native histograms, with
-  `histogramAggregation: { type: 'exponential' }` on `metrics.otel`. It applies to every
-  histogram, including custom ones, and exports each under its name plus a suffix, `_native` by
-  default. It cannot be combined with `histogramBucketOverrides`. Explicit buckets remain the
-  default.
+- **Experimental**: The OpenTelemetry metrics exporter can export every histogram as an OpenTelemetry
+  exponential histogram, which Prometheus-compatible backends store as a native histogram, via
+  `telemetryOptions.metrics.otel.histogramAggregation`. Explicit buckets remain the default, and the
+  option cannot be combined with `histogramBucketOverrides`.
 
 ### Changed
 

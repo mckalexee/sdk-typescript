@@ -350,7 +350,7 @@ export interface ExponentialHistogramAggregation {
   type: 'exponential';
 
   /**
-   * Maximum number of buckets in each of the positive and negative ranges.
+   * Maximum number of buckets in each of the positive and negative ranges. Must be greater than 0.
    *
    * @default 160
    */
@@ -505,8 +505,8 @@ export function compileOptions(options: RuntimeOptions): CompiledRuntimeOptions 
 function compileHistogramAggregation(
   aggregation: HistogramAggregation | undefined
 ): native.HistogramAggregationOptions {
-  switch (aggregation?.type) {
-    case undefined:
+  if (aggregation == null) return { type: 'explicit-buckets' };
+  switch (aggregation.type) {
     case 'explicit-buckets':
       return { type: 'explicit-buckets' };
     case 'exponential':

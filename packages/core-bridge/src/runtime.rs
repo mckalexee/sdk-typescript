@@ -481,26 +481,6 @@ mod config {
         }
     }
 
-    impl From<HistogramAggregationOptions> for HistogramAggregation {
-        fn from(val: HistogramAggregationOptions) -> Self {
-            match val {
-                HistogramAggregationOptions::ExplicitBuckets => Self::ExplicitBuckets,
-                HistogramAggregationOptions::Exponential {
-                    max_size,
-                    max_scale,
-                    name_suffix,
-                } => {
-                    let defaults = Base2ExponentialHistogramOptions::default();
-                    Self::Base2Exponential(Base2ExponentialHistogramOptions {
-                        max_size: max_size.unwrap_or(defaults.max_size),
-                        max_scale: max_scale.unwrap_or(defaults.max_scale),
-                        name_suffix: name_suffix.unwrap_or(defaults.name_suffix),
-                    })
-                }
-            }
-        }
-    }
-
     impl TryInto<CoreOtelCollectorOptions> for OtelMetricsExporterConfig {
         type Error = BridgeError;
 
@@ -520,6 +500,26 @@ mod config {
                 .build();
 
             Ok(options)
+        }
+    }
+
+    impl From<HistogramAggregationOptions> for HistogramAggregation {
+        fn from(val: HistogramAggregationOptions) -> Self {
+            match val {
+                HistogramAggregationOptions::ExplicitBuckets => Self::ExplicitBuckets,
+                HistogramAggregationOptions::Exponential {
+                    max_size,
+                    max_scale,
+                    name_suffix,
+                } => {
+                    let defaults = Base2ExponentialHistogramOptions::default();
+                    Self::Base2Exponential(Base2ExponentialHistogramOptions {
+                        max_size: max_size.unwrap_or(defaults.max_size),
+                        max_scale: max_scale.unwrap_or(defaults.max_scale),
+                        name_suffix: name_suffix.unwrap_or(defaults.name_suffix),
+                    })
+                }
+            }
         }
     }
 
