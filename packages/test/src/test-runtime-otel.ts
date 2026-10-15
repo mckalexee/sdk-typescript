@@ -165,22 +165,25 @@ test.serial(
   }
 );
 
-test.serial('Runtime.install() throws meaningful error when passed invalid metrics.otel.histogramAggregation', async (t) => {
-  t.throws(
-    () =>
-      Runtime.install({
-        telemetryOptions: {
-          metrics: {
-            otel: {
-              url: 'http://127.0.0.1:1234',
-              histogramAggregation: { type: 'bogus' } as any,
+test.serial(
+  'Runtime.install() throws meaningful error when passed invalid metrics.otel.histogramAggregation',
+  async (t) => {
+    t.throws(
+      () =>
+        Runtime.install({
+          telemetryOptions: {
+            metrics: {
+              otel: {
+                url: 'http://127.0.0.1:1234',
+                histogramAggregation: { type: 'bogus' } as any,
+              },
             },
           },
-        },
-      }),
-    { instanceOf: TypeError, message: /metrics.otel.histogramAggregation/ }
-  );
-});
+        }),
+      { instanceOf: TypeError, message: /metrics.otel.histogramAggregation/ }
+    );
+  }
+);
 
 test.serial('Runtime.install() accepts metrics.otel.url without headers', async (t) => {
   try {
