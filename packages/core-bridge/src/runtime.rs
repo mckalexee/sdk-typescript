@@ -287,7 +287,8 @@ mod config {
     use neon::prelude::*;
     use temporalio_common::telemetry::CoreLogStreamConsumer;
     use temporalio_common::telemetry::{
-        HistogramBucketOverrides, Logger as CoreTelemetryLogger, LoggerFormat, MetricTemporality,
+        Base2ExponentialHistogramOptions, HistogramAggregation, HistogramBucketOverrides,
+        Logger as CoreTelemetryLogger, LoggerFormat, MetricTemporality,
         OtelCollectorOptions as CoreOtelCollectorOptions, OtlpProtocol,
         PrometheusExporterOptions as CorePrometheusExporterOptions,
         TelemetryOptions as CoreTelemetryOptions,
@@ -358,7 +359,18 @@ mod config {
         global_tags: HashMap<String, String>,
         use_seconds_for_durations: bool,
         histogram_bucket_overrides: HashMap<String, Vec<f64>>,
+        histogram_aggregation: HistogramAggregationOptions,
         protocol: StringEncoded<OtlpProtocol>,
+    }
+
+    #[derive(Debug, Clone, TryFromJs)]
+    pub(super) enum HistogramAggregationOptions {
+        ExplicitBuckets,
+        Exponential {
+            max_size: Option<u32>,
+            max_scale: Option<i8>,
+            name_suffix: Option<String>,
+        },
     }
 
     #[derive(Debug, Clone, TryFromJs)]
@@ -483,10 +495,31 @@ mod config {
                 .histogram_bucket_overrides(HistogramBucketOverrides {
                     overrides: self.histogram_bucket_overrides,
                 })
+                .histogram_aggregation(self.histogram_aggregation.into())
                 .global_tags(self.global_tags)
                 .build();
 
             Ok(options)
+        }
+    }
+
+    impl From<HistogramAggregationOptions> for HistogramAggregation {
+        fn from(val: HistogramAggregationOptions) -> Self {
+            match val {
+                HistogramAggregationOptions::ExplicitBuckets => Self::ExplicitBuckets,
+                HistogramAggregationOptions::Exponential {
+                    max_size,
+                    max_scale,
+                    name_suffix,
+                } => {
+                    let defaults = Base2ExponentialHistogramOptions::default();
+                    Self::Base2Exponential(Base2ExponentialHistogramOptions {
+                        max_size: max_size.unwrap_or(defaults.max_size),
+                        max_scale: max_scale.unwrap_or(defaults.max_scale),
+                        name_suffix: name_suffix.unwrap_or(defaults.name_suffix),
+                    })
+                }
+            }
         }
     }
 

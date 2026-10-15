@@ -307,7 +307,68 @@ export interface OtelCollectorExporter {
      * for the exact meaning of boundaries.
      */
     histogramBucketOverrides?: Record<string, number[]>;
+
+    /**
+     * Selects how histogram metrics are aggregated.
+     *
+     * See {@link ExplicitBucketsHistogramAggregation} and {@link ExponentialHistogramAggregation}.
+     *
+     * @default { type: 'explicit-buckets' }
+     * @experimental
+     */
+    histogramAggregation?: HistogramAggregation;
   };
+}
+
+/**
+ * How the OpenTelemetry metrics exporter aggregates histogram metrics.
+ *
+ * @experimental
+ */
+export type HistogramAggregation = ExplicitBucketsHistogramAggregation | ExponentialHistogramAggregation;
+
+/**
+ * Aggregates histograms into fixed buckets, using either Core's default boundaries for each metric
+ * or {@link OtelCollectorExporter.otel.histogramBucketOverrides | histogramBucketOverrides}.
+ *
+ * @experimental
+ */
+export interface ExplicitBucketsHistogramAggregation {
+  type: 'explicit-buckets';
+}
+
+/**
+ * Exports every histogram, including custom ones created through the metric meter, as an
+ * OpenTelemetry base-2 exponential histogram, which Prometheus-compatible backends store as a
+ * native histogram. Exponential histograms are exported under the metric name plus a suffix, so
+ * they never share a name with the fixed-bucket series they replace. Cannot be combined with
+ * `histogramBucketOverrides`.
+ *
+ * @experimental
+ */
+export interface ExponentialHistogramAggregation {
+  type: 'exponential';
+
+  /**
+   * Maximum number of buckets in each of the positive and negative ranges. Must be greater than 0.
+   *
+   * @default 160
+   */
+  maxSize?: number;
+
+  /**
+   * Maximum resolution scale, from -10 to 20. Prometheus reduces any scale above 8 on ingest.
+   *
+   * @default 20
+   */
+  maxScale?: number;
+
+  /**
+   * Appended to the name of every histogram. Must not be empty.
+   *
+   * @default '_native'
+   */
+  nameSuffix?: string;
 }
 
 /**
@@ -425,6 +486,7 @@ export function compileOptions(options: RuntimeOptions): CompiledRuntimeOptions 
                 useSecondsForDurations: metrics.otel.useSecondsForDurations ?? false,
                 metricTemporality: metrics.otel.temporality ?? metrics.temporality ?? 'cumulative', // eslint-disable-line @typescript-eslint/no-deprecated
                 histogramBucketOverrides: metrics.otel.histogramBucketOverrides ?? {},
+                histogramAggregation: compileHistogramAggregation(metrics.otel.histogramAggregation),
                 globalTags: metrics.globalTags ?? {},
               } satisfies native.MetricExporterOptions)
             : metrics && isBufferedMetricsExporter(metrics)
@@ -438,6 +500,25 @@ export function compileOptions(options: RuntimeOptions): CompiledRuntimeOptions 
     },
     metricsBuffer: metrics && isBufferedMetricsExporter(metrics) ? metrics.buffer : undefined,
   };
+}
+
+function compileHistogramAggregation(
+  aggregation: HistogramAggregation | undefined
+): native.HistogramAggregationOptions {
+  if (aggregation == null) return { type: 'explicit-buckets' };
+  switch (aggregation.type) {
+    case 'explicit-buckets':
+      return { type: 'explicit-buckets' };
+    case 'exponential':
+      return {
+        type: 'exponential',
+        maxSize: aggregation.maxSize ?? null,
+        maxScale: aggregation.maxScale ?? null,
+        nameSuffix: aggregation.nameSuffix ?? null,
+      };
+    default:
+      throw new TypeError(`Invalid metrics.otel.histogramAggregation: ${JSON.stringify(aggregation)}`);
+  }
 }
 
 function compileLoggerOptions(options: RuntimeOptions): [Logger, native.LogExporterOptions] {

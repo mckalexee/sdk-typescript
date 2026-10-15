@@ -97,8 +97,18 @@ export interface OtelMetricsExporterOptions {
   globalTags: Record<string, string>;
   useSecondsForDurations: boolean;
   histogramBucketOverrides: Record<string, number[]>;
+  histogramAggregation: HistogramAggregationOptions;
   protocol: 'http' | 'grpc';
 }
+
+export type HistogramAggregationOptions =
+  | { type: 'explicit-buckets' }
+  | {
+      type: 'exponential';
+      maxSize: Option<number>;
+      maxScale: Option<number>;
+      nameSuffix: Option<string>;
+    };
 
 export interface BufferedMetricsExporterOptions {
   type: 'buffer';

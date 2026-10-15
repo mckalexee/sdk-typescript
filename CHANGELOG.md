@@ -75,6 +75,10 @@ to docs, or any other relevant information.
 - The Workflow sandbox now exposes `URLPattern`, both as a global and from the `url` module, when
   the Worker runs on Node.js 23.8 or later. On older Node.js versions, `URLPattern` remains undefined
   inside Workflows.
+- **Experimental**: The OpenTelemetry metrics exporter can export every histogram as an OpenTelemetry
+  exponential histogram, which Prometheus-compatible backends store as a native histogram, via
+  `telemetryOptions.metrics.otel.histogramAggregation`. Explicit buckets remain the default, and the
+  option cannot be combined with `histogramBucketOverrides`.
 
 ### Changed
 
@@ -112,6 +116,8 @@ to docs, or any other relevant information.
 - A workflow task that arrives while a Workflow waits on a Local Activity, such as a legacy query, now
   waits until the current workflow task is reported. Previously it replaced that workflow task, which then
   timed out on the server and could leave the Workflow stuck on a nondeterminism error (temporalio/sdk-rust#1640).
+- Workflows paused before a scheduled workflow task starts now resume after unpause instead of
+  failing during history replay (temporalio/sdk-rust#1618).
 
 ### Changed
 
